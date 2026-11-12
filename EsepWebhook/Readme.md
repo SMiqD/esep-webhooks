@@ -1,49 +1,58 @@
-# AWS Lambda Empty Function Project
+# ESEP Assignment 8: Event-Driven Architecture
 
-This starter project consists of:
-* Function.cs - class file containing a class with a single function handler method
-* aws-lambda-tools-defaults.json - default argument settings for use with Visual Studio and command line deployment tools for AWS
+Opening an issue in this public repository triggers a GitHub webhook, which calls API Gateway, invokes an AWS Lambda function, and posts the issue link to Slack.
 
-You may also have a test project depending on the options selected.
+## Function
 
-The generated function handler is a simple method accepting a string argument that returns the uppercase equivalent of the input string. Replace the body of this method, and parameters, to suit your needs. 
+The function uses .NET 10 and the built-in System.Text.Json library. It accepts GitHub's JSON directly, reads `issue.html_url`, and sends `Issue Created: <link>` to Slack. Events without an issue, including GitHub's initial ping, return `ignored`. Issue updates also send a message, as allowed by the assignment.
 
-## Here are some steps to follow from Visual Studio:
+The Slack URL is read exclusively from the Lambda environment variable `SLACK_URL`. Never commit its value or AWS credentials. Slack failures cause the invocation to fail instead of reporting a successful delivery.
 
-To deploy your function to AWS Lambda, right click the project in Solution Explorer and select *Publish to AWS Lambda*.
+## AWS configuration
 
-To view your deployed function open its Function View window by double-clicking the function name shown beneath the AWS Lambda node in the AWS Explorer tree.
+- Region: `us-east-2` (Ohio).
+- Lambda function: `EsepWebhook`.
+- Runtime: `dotnet10`.
+- Handler: `EsepWebhook::EsepWebhook.Function::FunctionHandler`.
+- Execution role policy: `AWSLambdaBasicExecutionRole`.
+- Environment variable: `SLACK_URL`, configured only in the Lambda console.
+- API Gateway: Regional REST API, POST on the root resource, Lambda proxy integration **off**.
+- Deployment stage: `default`.
 
-To perform testing against your deployed function use the Test Invoke tab in the opened Function View window.
+## Deploy
 
-To configure event sources for your deployed function, for example to have your function invoked when an object is created in an Amazon S3 bucket, use the Event Sources tab in the opened Function View window.
+From the repository root:
 
-To update the runtime configuration of your deployed function use the Configuration tab in the opened Function View window.
-
-To view execution logs of invocations of your function use the Logs tab in the opened Function View window.
-
-## Here are some steps to follow to get started from the command line:
-
-Once you have edited your template and code you can deploy your application using the [Amazon.Lambda.Tools Global Tool](https://github.com/aws/aws-extensions-for-dotnet-cli#aws-lambda-amazonlambdatools) from the command line.
-
-Install Amazon.Lambda.Tools Global Tools if not already installed.
-```
-    dotnet tool install -g Amazon.Lambda.Tools
+```powershell
+git pull --ff-only origin main
+cd EsepWebhook
+dotnet lambda deploy-function EsepWebhook --region us-east-2
 ```
 
-If already installed check if new version is available.
-```
-    dotnet tool update -g Amazon.Lambda.Tools
+Confirm `SLACK_URL` is still configured after deployment.
+
+## GitHub webhook
+
+In repository Settings > Webhooks, set the payload URL to the API Gateway Invoke URL ending in `/default`, content type to `application/json`, and select only **Issues**. Keep SSL verification and Active enabled. Leave Secret empty for this assignment.
+
+## Test
+
+In the Lambda console, create a test event with:
+
+```json
+{
+  "issue": {
+    "html_url": "https://github.com/SMiqD/esep-webhooks/issues/1"
+  }
+}
 ```
 
-Execute unit tests
-```
-    cd "EsepWebhook/test/EsepWebhook.Tests"
-    dotnet test
-```
+A successful Slack delivery returns `ok`. This sample sends the supplied link; it does not create a GitHub issue.
 
-Deploy function to AWS Lambda
-```
-    cd "EsepWebhook/src/EsepWebhook"
-    dotnet lambda deploy-function
-```
+For the complete integration test, open a real issue in this repository and confirm its link appears in the section's Slack channel. Check GitHub webhook Recent Deliveries and Lambda CloudWatch logs if needed.
+
+The starter string test (`"test"`) no longer applies after deploying this handler.
+
+## Submission
+
+Submit the public repository URL after confirming the full GitHub-to-Slack flow works.
